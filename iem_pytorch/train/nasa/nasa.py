@@ -9,10 +9,10 @@ from kernel import Kernel
 from configs.default_config import DefaultConfig
 
 
-class ZemoTrainer(Kernel):
+class NASATrainer(Kernel):
     def __init__(self,
                  config: DefaultConfig):
-        super(ZemoTrainer, self).__init__(config)
+        super(NASATrainer, self).__init__(config)
         pass
 
     def calulate_loss(self, vars):

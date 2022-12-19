@@ -4,6 +4,21 @@ import torch as pt
 import math
 
 
+class SliceByCols(nn.Module):
+    def __init__(self,
+                 dim: int,
+                 keep_idxs: list):
+        super(SliceByCols, self).__init__()
+        self.dim = dim
+        self.keep_idxs = keep_idxs
+
+    def forward(self, xs: pt.Tensor):
+        # outs = []
+        s_xs = pt.split(xs, 1, self.dim)
+        outs = [s_xs[idx] for idx in self.keep_idxs]
+        return tuple(outs)
+
+
 class ResNormLayer(nn.Module):
     def __init__(self, linear_size,):
         super(ResNormLayer, self).__init__()
