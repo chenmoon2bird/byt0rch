@@ -1,0 +1,13 @@
+*.pyc
+*.swp
+*.csv
+*.xlsx
+*.md5
+*.log
+*.yaml
+*.sh
+*.egg*
+*.ipynb_checkpoints*
+*.DS_Store
+
+.idea*
