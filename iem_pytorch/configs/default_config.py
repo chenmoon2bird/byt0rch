@@ -103,7 +103,7 @@ if __name__ == '__main__':
             'training': 'qq',
             'testing': 'qq',
             'normalizer': {
-                'model': 'zemo2.ZemoNormalizer',
+                'model': 'nasa.NASANorm',
                 'args': {
                     'mean_std_file': 'qq',
                     'data_folder': 'qq',
@@ -115,7 +115,7 @@ if __name__ == '__main__':
             'outputs': ['repres'],
             'layers': [
                 {'name': 'encoder',
-                 'model': 'zemo.rul_predictor.EnergePredictor',
+                 'model': 'nasa_rw.NASATransAE',
                  'inputs': ['x'],
                  'outputs': ['rul']}
             ]

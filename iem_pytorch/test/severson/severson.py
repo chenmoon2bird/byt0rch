@@ -12,7 +12,27 @@ for _ in range(2):
 sys.path.append(repo_dir)
 from utils import config_parser
 from utils.import_lib import import_model
-from data_loader.zemo_full import slice_df, IterDF, make_pack
+
+
+class IterDF:
+    def __init__(self, df, col):
+        self.df = df
+        self.col = col
+        self.index = 0
+        self.ids = self.df[self.col].unique().tolist()
+        self.max_num = len(self.ids)
+
+    def __iter__(self,):
+        return self
+
+    def __next__(self,):
+        if self.index < self.max_num:
+            id = self.ids[self.index]
+            _df = self.df[self.df[self.col] == id]
+            self.index += 1
+            return id, _df
+        else:
+            raise StopIteration
 
 
 args = config_parser.get_args()
