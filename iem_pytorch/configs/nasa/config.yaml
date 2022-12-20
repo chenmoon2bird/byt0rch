@@ -1,0 +1,179 @@
+mkflow_uri:
+experiment_name: "nasa_random_walk"
+run_name: "exp1"
+experiment_dir:
+data_path: &data_path "/bird/workspace/git/iem_dataset_nasa/train.csv"
+
+params:
+    batch_size: &batch_size 16
+    min_lr: &min_lr 1.e-5
+    max_lr: &max_lr 1.e-3
+    weight_decay: &wd 5.e-3
+    in_dim: &in_dim 5
+    tg_in_dim: &tg_in_dim 3
+    d_model: &d_model 256
+    model_d_hid: &mdh 1024
+    tg_decod_hids: &tg_decod_hids [512, 128, 64]
+    max_epoch: &me 155
+    fetch_cols:
+        &fcols ["voltage", "current", "temperature", "soc_fix", "w", "rw_group"]
+    xs_cols: &xs_cols ["voltage", "current", "temperature", "soc_fix", "w"]
+    tg_cols: &tg_cols ["temperature", "soc_fix", "w"]
+
+training_settings:
+    kernel: "nasa.nasa.NASATrainer"
+    mode: "train_eval"
+    device: 0
+    max_epoch: *me
+    pretrained_model:
+data:
+    training: *data_path
+    testing: *data_path
+    normalizer:
+        model: "nasa_norm.NASANorm"
+        args:
+            data_path: *data_path
+            norm_cols:
+                - column: "voltage"
+                  method: [0, 4.2]
+
+                - column: "current"
+                  method: [0, 4]
+
+                - column: "temperature"
+                  method: "zero_abs_max"
+
+                - column: "soc_fix"
+                  method: [0, 1]
+
+                - column: "w"
+                  method: [0, 8.2]
+
+                - column: "rw_group"
+                  method: [0, 1]
+    dataset:
+        train:
+            batch_size: *batch_size
+            shuffle: True
+            num_workers: 4
+            model: "nasa.NASARandomWalk"
+            args:
+                sample_columns: *fcols
+                sample_len: 3600
+                out_sets: [*xs_cols, *xs_cols, *tg_cols, ["rw_group"]]
+            outputs: ["xs", "xs_sty", "xs_tg", "rw"]
+        eval:
+            batch_size: *batch_size
+            shuffle: False
+            num_workers: 4
+            model: "nasa.NASARandomWalk"
+            args:
+                sample_columns: *fcols
+                sample_len: 3600
+                out_sets: [*xs_cols, *xs_cols, *tg_cols, ["rw_group"]]
+            outputs: ["xs", "xs_sty", "xs_tg", "rw_group"]
+optimizer:
+    optimizer:
+        model: "torch.optim.AdamW"
+        args:
+            lr: *min_lr
+            weight_decay: *wd
+            amsgrad: True
+    lr_scheduler:
+        model: "cosine.CosineAnnealingWarmupRestarts"
+        args:
+            max_lr: *max_lr
+            min_lr: *min_lr
+model:
+    inputs: ["xs", "xs_sty", "xs_tg"]
+    outputs:
+        [
+            "preds",
+            "volt",
+            "current",
+            "t_volt",
+            "t_current",
+            "feature",
+            "sty_mean",
+            "src_mean",
+            "sty_preds",
+        ]
+    layers:
+        - name: "volt_predictor"
+          model: "nasa_rw.NASATransAE"
+          args:
+              in_dim: *in_dim
+              d_model: *d_model #256
+              nhead: 2 #4
+              d_hid: *mdh #1024
+              enc_nlayers: 2
+
+              tg_in_dim: *tg_in_dim
+              tg_d_model: *d_model
+              tg_decod_hids: *tg_decod_hids
+              out_dim: *in_dim
+
+              tg_nhead: 2
+              tg_d_hid: *mdh
+              tg_enc_nlayers: 2
+              dropout: 0.
+          inputs: ["xs", "xs_sty", "xs_tg"]
+          outputs: ["feature", "sty_mean", "src_mean", "sty_preds", "preds"]
+        - name: "split_t"
+          model: "utils.SliceByCols"
+          args:
+              dim: 2
+              keep_idxs: [0, 1]
+          inputs: ["xs"]
+          outputs: ["t_volt", "t_current"]
+        - name: "split_preds"
+          model: "utils.SliceByCols"
+          args:
+              dim: 2
+              keep_idxs: [0, 1]
+          inputs: ["preds"]
+          outputs: ["volt", "current"]
+
+loss:
+    layers:
+        - name: "loss_src_recon"
+          model: "mse_loss.MSELoss"
+          args:
+              feature_reduction: "mean"
+          inputs: ["preds", "xs"]
+          outputs: ["loss_src_recon"]
+
+        - name: "monitor_volt"
+          model: "mse_loss.MSELoss"
+          args:
+              feature_reduction: "mean"
+          inputs: ["volt", "t_volt"]
+          outputs: ["monitor_volt"]
+        - name: "monitor_current"
+          model: "mse_loss.MSELoss"
+          args:
+              feature_reduction: "mean"
+          inputs: ["current", "t_current"]
+          outputs: ["monitor_current"]
+
+evaluator:
+    include: ["volt", "current", "t_volt", "t_current", "feature", "rw_group"]
+    metrics:
+        - name: "volt"
+          writer: "eval"
+          model: "regression.Regression"
+          args:
+              x: "volt"
+              y: "t_volt"
+        - name: "use_mask"
+          writer: "eval"
+          model: "regression.Regression"
+          args:
+              x: "current"
+              y: "t_current"
+        - name: "rc_feats"
+          writer: "eval"
+          model: "clusttering.Clusttering"
+          args:
+              embedding_name: "feature"
+              hue: "rw_group"
