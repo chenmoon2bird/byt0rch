@@ -74,6 +74,9 @@ class NASARandomWalk(Dataset):
             if n < self.min_ts:
                 self.min_ts = n
         self.ts_len = self.max_ts + 1
+        if self.min_ts < self.sample_len:
+            print(f'set sample_len to {self.min_ts}, from {self.sample_len}')
+            self.sample_len = self.min_ts
 
     def __len__(self,):
         return len(self.xs)
